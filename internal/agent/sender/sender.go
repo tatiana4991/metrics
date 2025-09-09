@@ -3,10 +3,10 @@ package sender
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/tatiana4991/metrics/internal/config"
 	models "github.com/tatiana4991/metrics/internal/model"
 	"github.com/tatiana4991/metrics/internal/storage"
@@ -15,14 +15,14 @@ import (
 type Sender struct {
 	config *config.Config
 	store  storage.Storage
-	client *http.Client
+	client *resty.Client
 }
 
 func NewSender(cfg *config.Config, store storage.Storage) *Sender {
 	return &Sender{
 		config: cfg,
 		store:  store,
-		client: &http.Client{Timeout: 5 * time.Second},
+		client: resty.New().SetTimeout(5 * time.Second),
 	}
 }
 
@@ -58,24 +58,19 @@ func (s *Sender) SendAll() {
 			m.ID,
 			valueStr)
 
-		req, err := http.NewRequest("POST", url, nil)
-		if err != nil {
-			log.Printf("Failed to create request for %s: %v", m.ID, err)
-			continue
-		}
-		req.Header.Set("Content-Type", "text/plain")
+		resp, err := s.client.R().
+			SetHeader("Content-Type", "text/plain").
+			Post(url)
 
-		resp, err := s.client.Do(req)
 		if err != nil {
 			log.Printf("Failed to send metric %s: %v", m.ID, err)
 			continue
 		}
-		resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
-			log.Printf("Server responded with %d for metric %s", resp.StatusCode, m.ID)
-		} else {
+		if resp.StatusCode() == 200 {
 			log.Printf("Sent %s %s = %s", m.MType, m.ID, valueStr)
+		} else {
+			log.Printf("Server responded with %d for metric %s", resp.StatusCode(), m.ID)
 		}
 	}
 }

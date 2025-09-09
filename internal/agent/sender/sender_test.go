@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/tatiana4991/metrics/internal/config"
 	models "github.com/tatiana4991/metrics/internal/model"
@@ -132,11 +133,12 @@ func TestSender_SendAll_HTTPClientError(t *testing.T) {
 		},
 	}
 
-	client := &http.Client{Timeout: 100 * time.Millisecond}
+	restyClient := resty.New().SetTimeout(100 * time.Millisecond)
+
 	sender := &Sender{
 		config: &config.Config{ServerAddress: server.URL},
 		store:  mockStore,
-		client: client,
+		client: restyClient,
 	}
 
 	sender.SendAll()
