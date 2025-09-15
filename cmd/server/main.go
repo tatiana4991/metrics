@@ -6,8 +6,11 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"go.uber.org/zap"
 
 	"github.com/tatiana4991/metrics/internal/config"
 	models "github.com/tatiana4991/metrics/internal/model"
@@ -21,14 +24,25 @@ type TemplateData struct {
 
 func main() {
 	cfg := config.Load()
+
+	logger, err := zap.NewProduction()
+	if err != nil {
+		log.Fatal("Failed to create logger:", err)
+	}
+	defer logger.Sync()
+
+	sugar := logger.Sugar()
+
 	store := storage.NewMemStorage()
 
 	tmpl, err := template.ParseFiles("./cmd/server/tmpl/index.html")
 	if err != nil {
-		log.Fatal("Failed to load template:", err)
+		sugar.Fatal("Failed to load template:", err)
 	}
 
 	r := chi.NewRouter()
+
+	r.Use(requestLogger(sugar))
 
 	r.Post("/update/{type}/{name}/{value}", func(w http.ResponseWriter, r *http.Request) {
 		update(w, r, store)
@@ -43,6 +57,28 @@ func main() {
 	})
 
 	log.Fatal(http.ListenAndServe(cfg.ServerAddress, r))
+}
+
+func requestLogger(logger *zap.SugaredLogger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+
+			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+
+			next.ServeHTTP(ww, r)
+
+			duration := time.Since(start)
+			logger.Infof(
+				"method=%s uri=%s status=%d size=%d duration=%v",
+				r.Method,
+				r.URL.Path,
+				ww.Status(),
+				ww.BytesWritten(),
+				duration,
+			)
+		})
+	}
 }
 
 func update(w http.ResponseWriter, r *http.Request, store storage.Storage) {
