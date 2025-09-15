@@ -3,7 +3,7 @@ package sender
 import (
 	"fmt"
 	"log"
-	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -35,14 +35,14 @@ func (s *Sender) SendAll() {
 		switch m.MType {
 		case models.Gauge:
 			if m.Value != nil {
-				valueStr = strconv.FormatFloat(*m.Value, 'f', -1, 64)
+				valueStr = fmt.Sprintf("%.f", *m.Value)
 			} else {
 				log.Printf("Gauge %s has nil value", m.ID)
 				continue
 			}
 		case models.Counter:
 			if m.Delta != nil {
-				valueStr = strconv.FormatInt(*m.Delta, 10)
+				valueStr = fmt.Sprintf("%d", *m.Delta)
 			} else {
 				log.Printf("Counter %s has nil delta", m.ID)
 				continue
@@ -52,8 +52,13 @@ func (s *Sender) SendAll() {
 			continue
 		}
 
+		serverAddr := s.config.ServerAddress
+		if !strings.HasPrefix(serverAddr, "http://") && !strings.HasPrefix(serverAddr, "https://") {
+			serverAddr = "http://" + serverAddr
+		}
+
 		url := fmt.Sprintf("%s/update/%s/%s/%s",
-			s.config.ServerAddress,
+			serverAddr,
 			m.MType,
 			m.ID,
 			valueStr)

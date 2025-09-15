@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"log"
 	"net/http"
 	"strconv"
@@ -21,10 +20,7 @@ type TemplateData struct {
 }
 
 func main() {
-	cfg := config.NewConfig()
-	flag.StringVar(&cfg.ServerAddress, "a", cfg.ServerAddress, "Server address (default :8080)")
-	flag.Parse()
-
+	cfg := config.Load()
 	store := storage.NewMemStorage()
 
 	tmpl, err := template.ParseFiles("./cmd/server/tmpl/index.html")
@@ -89,10 +85,13 @@ func getAll(w http.ResponseWriter, store storage.Storage, tmpl *template.Templat
 	var gauges, counters []models.Metrics
 
 	for _, m := range metrics {
-		if m.MType == models.Gauge {
+		switch m.MType {
+		case models.Gauge:
 			gauges = append(gauges, m)
-		} else if m.MType == models.Counter {
+		case models.Counter:
 			counters = append(counters, m)
+		default:
+			log.Printf("Unknown metric type: %s", m.MType)
 		}
 	}
 
